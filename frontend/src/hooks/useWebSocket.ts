@@ -5,7 +5,8 @@ import { useEvaluationStore, ChatMessage } from "@/store/evaluationStore";
 import { StackRecommendation, ApprovalRequest } from "@/types";
 
 const WS_BASE_URL =
-  process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000/ws";
+  process.env.NEXT_PUBLIC_WS_URL ??
+  (typeof window !== "undefined" ? `ws://${window.location.host}/ws` : "ws://localhost:8000/ws");
 const MAX_RECONNECT_DELAY = 30_000;
 
 function makeId(): string {

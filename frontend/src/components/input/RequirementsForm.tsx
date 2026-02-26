@@ -142,7 +142,9 @@ export default function RequirementsForm() {
     setSubmitting(true);
 
     try {
-      const res = await fetch("http://localhost:8000/api/sessions", {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ??
+        (typeof window !== "undefined" ? window.location.origin : "http://localhost:8000");
+      const res = await fetch(`${apiBase}/api/sessions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
