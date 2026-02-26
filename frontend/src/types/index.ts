@@ -92,3 +92,10 @@ export interface ApprovalResponse {
   decision: "approve" | "modify" | "reject";
   feedback: string | null;
 }
+
+export interface ScenarioResult {
+  id: string;
+  query: string;
+  analysis: string;
+  timestamp: string;
+}

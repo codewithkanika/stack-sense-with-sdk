@@ -95,12 +95,12 @@ The orchestrator coordinates 6 specialized subagents:
 | frontend-evaluator | Evaluates UI frameworks (React, Vue, Angular, Svelte, etc.) |
 | backend-evaluator | Evaluates server-side tech (Node, Python, Go, Rust, etc.) |
 | database-evaluator | Evaluates databases (PostgreSQL, MongoDB, DynamoDB, etc.) |
-| infrastructure-evaluator | Evaluates cloud platforms (AWS, GCP, Azure, etc.) |
+| infrastructure-evaluator | Evaluates cloud, on-prem, and hybrid deployment (AWS, GCP, K8s, etc.) |
 | scenario-planner | Analyzes "what-if" scenarios for stack changes |
 
 ## Current Status
 
-Features 1-7 of 27 complete. See [FEATURES.md](FEATURES.md) for detailed progress.
+Features 1-18 of 27 complete. See [FEATURES.md](FEATURES.md) for detailed progress.
 
 - [x] Backend scaffolding (FastAPI, CORS, health check)
 - [x] Frontend scaffolding (Next.js, Tailwind, Header)
@@ -109,7 +109,16 @@ Features 1-7 of 27 complete. See [FEATURES.md](FEATURES.md) for detailed progres
 - [x] WebSocket layer (message routing)
 - [x] Custom MCP tools (GitHub stats, benchmarks, pricing)
 - [x] Agent prompts & subagent definitions
-- [ ] Orchestrator agent
-- [ ] Wire orchestrator to WebSocket
-- [ ] Landing page (requirements form)
-- [ ] ...and 17 more
+- [x] Orchestrator agent (Anthropic API, tool dispatch, approval gates)
+- [x] Wire orchestrator to WebSocket
+- [x] Landing page (requirements form + priority sliders)
+- [x] WebSocket hook + Zustand store
+- [x] Chat panel + message bubbles
+- [x] Approval gate UI (approve/modify/reject)
+- [x] Recommendation cards with confidence scores
+- [x] Alternatives & comparison table (sortable)
+- [x] Trade-off radar chart (Recharts)
+- [x] Scenario planning panel
+- [x] Evaluation dashboard layout (split view)
+- [ ] Tests (unit, integration, E2E) — 5 features
+- [ ] Docker + CI/CD + AWS deployment — 3 features

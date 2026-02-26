@@ -77,7 +77,7 @@ Work through these features one at a time, in order. Each is self-contained and 
 **Scope**: EvaluationOrchestrator class — initialize SDK client, approval gate callback, evaluate(), handle_chat(), message routing
 **Files**: `backend/app/agent/orchestrator.py`, `backend/app/services/evaluation.py`, `backend/app/services/__init__.py`
 **Test**: Create orchestrator instance, send a test prompt, verify messages stream
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 ---
 
@@ -85,7 +85,7 @@ Work through these features one at a time, in order. Each is self-contained and 
 **Scope**: Connect WebSocket handler to orchestrator — relay messages bidirectionally
 **Files**: Update `backend/app/api/websocket.py` to use orchestrator
 **Test**: Send `{"type": "user_message", "payload": {"message": "hello"}}` via WS → get agent response back
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 ---
 
@@ -93,7 +93,7 @@ Work through these features one at a time, in order. Each is self-contained and 
 **Scope**: RequirementsForm + CriteriaSliders components, form validation, submit calls POST /api/sessions and navigates to /evaluate
 **Files**: `frontend/src/app/page.tsx`, `frontend/src/components/input/RequirementsForm.tsx`, `frontend/src/components/input/CriteriaSliders.tsx`
 **Test**: Fill form → submit → navigates to `/evaluate?session=xxx`
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 ---
 
@@ -101,7 +101,7 @@ Work through these features one at a time, in order. Each is self-contained and 
 **Scope**: useWebSocket hook (connect, send, reconnect), evaluationStore (messages, recommendations, approvals, phase)
 **Files**: `frontend/src/hooks/useWebSocket.ts`, `frontend/src/store/evaluationStore.ts`
 **Test**: Hook connects to backend WS, messages dispatch to store
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 ---
 
@@ -109,7 +109,7 @@ Work through these features one at a time, in order. Each is self-contained and 
 **Scope**: ChatPanel + MessageBubble components, real-time message display, text input + send
 **Files**: `frontend/src/components/chat/ChatPanel.tsx`, `frontend/src/components/chat/MessageBubble.tsx`
 **Test**: Type message → appears in chat → agent response streams back
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 ---
 
@@ -117,7 +117,7 @@ Work through these features one at a time, in order. Each is self-contained and 
 **Scope**: ApprovalGate component — shows recommendation summary, Approve/Modify/Reject buttons, sends response via WS
 **Files**: `frontend/src/components/chat/ApprovalGate.tsx`
 **Test**: Approval card renders inline in chat, clicking Approve sends WS message, card updates state
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 ---
 
@@ -125,7 +125,7 @@ Work through these features one at a time, in order. Each is self-contained and 
 **Scope**: RecommendationCard component — displays primary stack per category (Frontend, Backend, Database, Infra) with confidence, pros/cons, justification
 **Files**: `frontend/src/components/results/RecommendationCard.tsx`
 **Test**: Cards render with mock data, confidence bar shows correctly
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 ---
 
@@ -133,7 +133,7 @@ Work through these features one at a time, in order. Each is self-contained and 
 **Scope**: AlternativeStacks (tabbed view) + ComparisonTable (sortable table)
 **Files**: `frontend/src/components/results/AlternativeStacks.tsx`, `frontend/src/components/results/ComparisonTable.tsx`
 **Test**: Tabs switch categories, table sorts by columns, recommended row highlighted
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 ---
 
@@ -141,7 +141,7 @@ Work through these features one at a time, in order. Each is self-contained and 
 **Scope**: TradeoffChart using Recharts RadarChart — compare technologies across dimensions
 **Files**: `frontend/src/components/results/TradeoffChart.tsx`
 **Test**: Radar chart renders with overlaid polygons for 2-3 technologies
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 ---
 
@@ -149,7 +149,7 @@ Work through these features one at a time, in order. Each is self-contained and 
 **Scope**: ScenarioPanel — "What if..." input, before/after comparison display
 **Files**: `frontend/src/components/results/ScenarioPanel.tsx`
 **Test**: Submit scenario query → comparison cards appear with impact summary
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 ---
 
@@ -157,7 +157,7 @@ Work through these features one at a time, in order. Each is self-contained and 
 **Scope**: Wire all components into the evaluation page — split layout (chat left, results right), progress indicators
 **Files**: `frontend/src/app/evaluate/page.tsx`, `frontend/src/components/layout/Sidebar.tsx`
 **Test**: Full dashboard renders with chat panel, recommendation cards, alternatives, chart
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 ---
 
