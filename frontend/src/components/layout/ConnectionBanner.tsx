@@ -28,6 +28,12 @@ const STATUS_CONFIG: Record<
     label: "Disconnected",
     animate: false,
   },
+  error: {
+    dotColor: "bg-red-600",
+    bgColor: "bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800",
+    label: "Connection error -- retrying...",
+    animate: true,
+  },
 };
 
 export default function ConnectionBanner({ status }: ConnectionBannerProps) {

@@ -1,17 +1,23 @@
 # Python
-backend/venv/
 __pycache__/
 *.pyc
 *.pyo
-backend/.env
+*.egg-info/
+venv/
+.env
 
 # Node
-frontend/node_modules/
-frontend/.next/
-
-# OS
-.DS_Store
+node_modules/
+.next/
+out/
 
 # IDE
 .vscode/
 .idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log

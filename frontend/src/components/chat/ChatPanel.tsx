@@ -68,10 +68,30 @@ function ConnectionBadge({ status }: { status: string }) {
       </div>
     );
   }
+  if (status === "error") {
+    return (
+      <div className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
+        <WifiOff className="h-3 w-3" />
+        <span>Error</span>
+      </div>
+    );
+  }
   return (
     <div className="flex items-center gap-1 text-xs text-zinc-400 dark:text-zinc-500">
       <WifiOff className="h-3 w-3" />
       <span>Disconnected</span>
+    </div>
+  );
+}
+
+function TypingIndicator() {
+  return (
+    <div className="mx-4 my-2 flex items-center gap-1.5">
+      <div className="flex h-8 items-center gap-1 rounded-xl bg-zinc-100 px-3 dark:bg-zinc-800">
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400 dark:bg-zinc-500 [animation-delay:0ms]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400 dark:bg-zinc-500 [animation-delay:150ms]" />
+        <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-400 dark:bg-zinc-500 [animation-delay:300ms]" />
+      </div>
     </div>
   );
 }
@@ -81,16 +101,18 @@ export default function ChatPanel() {
   const messages = useEvaluationStore((s) => s.messages);
   const phase = useEvaluationStore((s) => s.phase);
   const pendingApproval = useEvaluationStore((s) => s.pendingApproval);
+  const isLoading = useEvaluationStore((s) => s.isLoading);
+  const error = useEvaluationStore((s) => s.error);
 
   const { send, connectionStatus } = useWebSocket(sessionId);
 
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll to bottom when messages change or typing indicator appears
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, pendingApproval]);
+  }, [messages, pendingApproval, isLoading]);
 
   const handleSend = (e: FormEvent) => {
     e.preventDefault();
@@ -141,6 +163,16 @@ export default function ChatPanel() {
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
+
+        {/* Typing indicator while agent is responding */}
+        {isLoading && <TypingIndicator />}
+
+        {/* Error display */}
+        {error && connectionStatus === "connected" && (
+          <div className="mx-1 my-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
+            {error}
+          </div>
+        )}
 
         {/* Progress indicators during evaluation */}
         {isEvaluating && <ProgressIndicator />}

@@ -5,7 +5,7 @@ AI-powered tech stack evaluation agent that helps teams choose the right technol
 ## Tech Stack
 
 - **Backend**: Python + FastAPI + WebSocket + Claude Agent SDK
-- **Frontend**: Next.js 15 + React 19 + Tailwind CSS + TypeScript + Zustand + Recharts
+- **Frontend**: Next.js 16 + React 19 + Tailwind CSS 4 + TypeScript + Zustand + Recharts
 - **AI**: Claude Agent SDK with 6 specialized subagents
 - **Communication**: WebSocket (real-time streaming) + REST (CRUD)
 
@@ -44,6 +44,27 @@ stack-sense-with-sdk/
 │   │   │   └── layout/Header.tsx   # App header
 │   │   └── types/index.ts          # TypeScript interfaces
 │   └── package.json
+│   ├── tests/
+│   │   ├── unit/                  # Unit tests (schemas, session, tools, prompts)
+│   │   ├── integration/           # Integration tests (API, WebSocket, orchestrator)
+│   │   └── system/                # E2E tests (requires API key)
+│   ├── Dockerfile
+│   └── .dockerignore
+├── frontend/
+│   ├── src/
+│   │   ├── app/                    # Next.js app router pages
+│   │   ├── components/             # React components (chat, results, layout, input)
+│   │   ├── hooks/                  # Custom hooks (useWebSocket)
+│   │   ├── store/                  # Zustand store (evaluationStore)
+│   │   ├── types/index.ts          # TypeScript interfaces
+│   │   └── __tests__/              # Jest + RTL tests (unit, integration, system)
+│   ├── Dockerfile
+│   ├── jest.config.ts
+│   └── package.json
+├── .github/workflows/
+│   ├── ci.yml                      # CI: lint, test, build, Docker
+│   └── deploy.yml                  # CD: ECR push + ECS deploy
+├── docker-compose.yml              # Local dev with Docker
 ├── docs/
 │   └── PLAN.md                     # Full architecture and specs
 └── FEATURES.md                     # Feature checklist with status
@@ -98,9 +119,52 @@ The orchestrator coordinates 6 specialized subagents:
 | infrastructure-evaluator | Evaluates cloud, on-prem, and hybrid deployment (AWS, GCP, K8s, etc.) |
 | scenario-planner | Analyzes "what-if" scenarios for stack changes |
 
+## Testing
+
+### Backend (56 tests)
+
+```bash
+cd backend
+source venv/bin/activate
+pip install pytest pytest-asyncio httpx-ws
+python -m pytest tests/unit/ tests/integration/ -v
+```
+
+### Frontend (54 tests)
+
+```bash
+cd frontend
+npm install
+npx jest --verbose
+```
+
+### System/E2E (requires ANTHROPIC_API_KEY)
+
+```bash
+cd backend && python -m pytest -m system -v
+```
+
+## Docker
+
+```bash
+docker compose up --build
+```
+
+Backend: http://localhost:8000 | Frontend: http://localhost:3000
+
+## Deployment
+
+Deployed to AWS ECS Fargate + ALB via GitHub Actions.
+
+- Push to `main` triggers CI (lint, test, build, Docker)
+- After CI passes, deploy workflow pushes images to ECR and updates ECS services
+- ALB configured with 300s idle timeout for WebSocket support
+
+Required GitHub secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+
 ## Current Status
 
-Features 1-18 of 27 complete. See [FEATURES.md](FEATURES.md) for detailed progress.
+All 27 features complete. See [FEATURES.md](FEATURES.md) for detailed progress.
 
 - [x] Backend scaffolding (FastAPI, CORS, health check)
 - [x] Frontend scaffolding (Next.js, Tailwind, Header)
@@ -120,5 +184,12 @@ Features 1-18 of 27 complete. See [FEATURES.md](FEATURES.md) for detailed progre
 - [x] Trade-off radar chart (Recharts)
 - [x] Scenario planning panel
 - [x] Evaluation dashboard layout (split view)
-- [ ] Tests (unit, integration, E2E) — 5 features
-- [ ] Docker + CI/CD + AWS deployment — 3 features
+- [x] Backend unit tests (38 tests)
+- [x] Backend integration tests (18 tests)
+- [x] Frontend unit tests (35 tests)
+- [x] Frontend system tests (19 tests)
+- [x] System/E2E tests
+- [x] End-to-end polish (loading states, error handling, connection banner)
+- [x] Dockerization (backend + frontend + compose)
+- [x] CI/CD (GitHub Actions)
+- [x] AWS deployment config (ECS Fargate + ALB)

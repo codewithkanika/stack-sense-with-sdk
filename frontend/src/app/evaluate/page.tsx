@@ -57,6 +57,7 @@ function EvaluateContent() {
     recommendation,
     phase,
     connectionStatus,
+    error,
     scenarios,
   } = useEvaluationStore();
 
@@ -68,6 +69,9 @@ function EvaluateContent() {
       setSessionId(sessionId);
     }
   }, [sessionId, setSessionId]);
+
+  const isConnecting = connectionStatus === "connecting";
+  const isError = connectionStatus === "error";
 
   const hasRecommendation = recommendation !== null;
   const hasAlternatives =
@@ -95,9 +99,34 @@ function EvaluateContent() {
             <ConnectionBanner status={connectionStatus} />
           </div>
 
-          {!showResults ? (
+          {/* Error state when WebSocket has an error */}
+          {isError && error && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-800 dark:bg-red-950/40">
+              <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">
+                Connection Error
+              </h3>
+              <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                {error}. The system will attempt to reconnect automatically.
+              </p>
+            </div>
+          )}
+
+          {/* Loading skeleton while connecting */}
+          {isConnecting && !showResults && (
+            <div className="space-y-4">
+              <div className="h-6 w-48 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
+              <div className="h-4 w-full animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
+              <div className="h-4 w-3/4 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
+              <div className="grid grid-cols-1 gap-4 pt-4 md:grid-cols-2">
+                <div className="h-32 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-700" />
+                <div className="h-32 animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-700" />
+              </div>
+            </div>
+          )}
+
+          {!showResults && !isConnecting ? (
             <WelcomeState />
-          ) : (
+          ) : showResults ? (
             <div className="space-y-6">
               {/* Evaluating indicator */}
               {phase === "evaluating" && !hasRecommendation && (
@@ -153,7 +182,7 @@ function EvaluateContent() {
                 <ScenarioPanel scenarios={scenarios} send={send} />
               </section>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

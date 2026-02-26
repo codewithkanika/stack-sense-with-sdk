@@ -14,7 +14,11 @@ export type Phase =
   | "awaiting_approval"
   | "completed";
 
-export type ConnectionStatus = "disconnected" | "connecting" | "connected";
+export type ConnectionStatus =
+  | "disconnected"
+  | "connecting"
+  | "connected"
+  | "error";
 export type SubagentStatus = "pending" | "running" | "done";
 
 export interface ChatMessage {
@@ -31,6 +35,12 @@ interface EvaluationStore {
 
   connectionStatus: ConnectionStatus;
   setConnectionStatus: (status: ConnectionStatus) => void;
+
+  isLoading: boolean;
+  setIsLoading: (loading: boolean) => void;
+
+  error: string | null;
+  setError: (error: string | null) => void;
 
   messages: ChatMessage[];
   addMessage: (msg: ChatMessage) => void;
@@ -56,6 +66,8 @@ interface EvaluationStore {
 const initialState = {
   sessionId: null,
   connectionStatus: "disconnected" as ConnectionStatus,
+  isLoading: false,
+  error: null as string | null,
   messages: [] as ChatMessage[],
   phase: "input" as Phase,
   progress: {} as Record<string, SubagentStatus>,
@@ -70,6 +82,10 @@ export const useEvaluationStore = create<EvaluationStore>((set) => ({
   setSessionId: (id) => set({ sessionId: id }),
 
   setConnectionStatus: (status) => set({ connectionStatus: status }),
+
+  setIsLoading: (loading) => set({ isLoading: loading }),
+
+  setError: (error) => set({ error }),
 
   addMessage: (msg) =>
     set((state) => ({ messages: [...state.messages, msg] })),

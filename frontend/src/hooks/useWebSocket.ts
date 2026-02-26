@@ -20,6 +20,8 @@ export function useWebSocket(sessionId: string | null) {
 
   const {
     setConnectionStatus,
+    setIsLoading,
+    setError,
     addMessage,
     setPhase,
     setProgress,
@@ -32,8 +34,14 @@ export function useWebSocket(sessionId: string | null) {
   const send = useCallback((data: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data));
+      // Show loading indicator while waiting for agent response
+      const msgType = data.type as string | undefined;
+      if (msgType === "user_message" || msgType === "start_evaluation" || msgType === "scenario_query") {
+        setIsLoading(true);
+        setError(null);
+      }
     }
-  }, []);
+  }, [setIsLoading, setError]);
 
   /** Dispatch an incoming server message to the store */
   const handleMessage = useCallback(
@@ -50,6 +58,7 @@ export function useWebSocket(sessionId: string | null) {
 
       switch (type) {
         case "agent_message": {
+          setIsLoading(false);
           const msg: ChatMessage = {
             id: makeId(),
             role: "agent",
@@ -62,6 +71,7 @@ export function useWebSocket(sessionId: string | null) {
         }
 
         case "agent_thinking": {
+          setIsLoading(true);
           const msg: ChatMessage = {
             id: makeId(),
             role: "system",
@@ -118,6 +128,7 @@ export function useWebSocket(sessionId: string | null) {
         }
 
         case "evaluation_complete": {
+          setIsLoading(false);
           setPhase("completed");
           const msg: ChatMessage = {
             id: makeId(),
@@ -131,11 +142,13 @@ export function useWebSocket(sessionId: string | null) {
         }
 
         case "error": {
+          setIsLoading(false);
+          const errorText = (payload.message ?? payload.error ?? "An error occurred.") as string;
+          setError(errorText);
           const msg: ChatMessage = {
             id: makeId(),
             role: "system",
-            content:
-              (payload.message ?? payload.error ?? "An error occurred.") as string,
+            content: errorText,
             timestamp: new Date(),
             type: "error",
           };
@@ -158,7 +171,7 @@ export function useWebSocket(sessionId: string | null) {
           break;
       }
     },
-    [addMessage, setPhase, setProgress, setRecommendation, setPendingApproval],
+    [addMessage, setPhase, setProgress, setRecommendation, setPendingApproval, setIsLoading, setError],
   );
 
   /** Establish a WebSocket connection */
@@ -179,6 +192,7 @@ export function useWebSocket(sessionId: string | null) {
 
     ws.addEventListener("open", () => {
       setConnectionStatus("connected");
+      setError(null);
       reconnectDelay.current = 1_000; // reset backoff on success
     });
 
@@ -201,9 +215,11 @@ export function useWebSocket(sessionId: string | null) {
     });
 
     ws.addEventListener("error", () => {
+      setConnectionStatus("error");
+      setError("WebSocket connection error");
       // The close handler will fire after error, which triggers reconnect
     });
-  }, [sessionId, setConnectionStatus, handleMessage]);
+  }, [sessionId, setConnectionStatus, setError, handleMessage]);
 
   /** Connect when sessionId changes; clean up on unmount */
   useEffect(() => {

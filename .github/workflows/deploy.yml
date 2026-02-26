@@ -1,0 +1,52 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "*.md"
+      - "docs/**"
+
+env:
+  AWS_REGION: us-east-1
+  ECR_BACKEND_REPO: stackadvisor-backend
+  ECR_FRONTEND_REPO: stackadvisor-frontend
+  ECS_CLUSTER: stackadvisor-cluster
+  ECS_BACKEND_SERVICE: stackadvisor-backend
+  ECS_FRONTEND_SERVICE: stackadvisor-frontend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push backend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_BACKEND_REPO:${{ github.sha }} -t $ECR_REGISTRY/$ECR_BACKEND_REPO:latest ./backend
+          docker push $ECR_REGISTRY/$ECR_BACKEND_REPO --all-tags
+
+      - name: Build and push frontend
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          docker build -t $ECR_REGISTRY/$ECR_FRONTEND_REPO:${{ github.sha }} -t $ECR_REGISTRY/$ECR_FRONTEND_REPO:latest ./frontend
+          docker push $ECR_REGISTRY/$ECR_FRONTEND_REPO --all-tags
+
+      - name: Update ECS services
+        run: |
+          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_BACKEND_SERVICE --force-new-deployment
+          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_FRONTEND_SERVICE --force-new-deployment
