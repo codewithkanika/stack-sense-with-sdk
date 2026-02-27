@@ -1,7 +1,7 @@
 """
 Orchestrator agent for StackAdvisor tech stack evaluation.
 
-Uses the Anthropic Python SDK (AsyncAnthropic) to run a multi-turn conversation
+Uses the AWS Bedrock Converse API (via boto3) to run a multi-turn conversation
 with the orchestrator system prompt, dispatching tool calls to TOOL_HANDLERS
 and handling the human-in-the-loop approval gate via WebSocket.
 """
@@ -11,25 +11,22 @@ import json
 import logging
 from typing import Any
 
-import anthropic
+import boto3
 
 from app.config import settings
 from app.agent.prompts import ORCHESTRATOR_SYSTEM_PROMPT
-from app.agent.tools import TOOL_DEFINITIONS, TOOL_HANDLERS
+from app.agent.tools import TOOL_DEFINITIONS_BEDROCK, TOOL_HANDLERS
 from app.models.schemas import ProjectRequirements, ApprovalResponse
 
 logger = logging.getLogger(__name__)
-
-# Model to use for orchestrator conversations
-ORCHESTRATOR_MODEL = "claude-sonnet-4-20250514"
 
 
 class EvaluationOrchestrator:
     """Orchestrates a tech stack evaluation session.
 
-    Manages a multi-turn conversation with the Claude API, dispatches tool calls
-    to registered handlers, and coordinates human-in-the-loop approval via
-    WebSocket messages.
+    Manages a multi-turn conversation with the Bedrock Converse API, dispatches
+    tool calls to registered handlers, and coordinates human-in-the-loop
+    approval via WebSocket messages.
 
     Args:
         session_id: Unique identifier for the evaluation session.
@@ -40,7 +37,10 @@ class EvaluationOrchestrator:
     def __init__(self, session_id: str, ws_send_callback: Any) -> None:
         self.session_id = session_id
         self.ws_send = ws_send_callback
-        self.client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+        self.client = boto3.client(
+            "bedrock-runtime", region_name=settings.AWS_REGION
+        )
+        self.model_id = settings.BEDROCK_MODEL_ID
         self.conversation_history: list[dict[str, Any]] = []
         self.approval_event = asyncio.Event()
         self.approval_response: ApprovalResponse | None = None
@@ -50,11 +50,7 @@ class EvaluationOrchestrator:
     # ------------------------------------------------------------------
 
     async def evaluate(self, requirements: ProjectRequirements) -> None:
-        """Start a new evaluation for the given project requirements.
-
-        Serialises the requirements to JSON and sends them as the first user
-        message to the orchestrator model.
-        """
+        """Start a new evaluation for the given project requirements."""
         prompt = (
             "Evaluate the tech stack for this project:\n\n"
             f"{requirements.model_dump_json(indent=2)}"
@@ -77,26 +73,27 @@ class EvaluationOrchestrator:
     async def _run_conversation(self, user_message: str) -> None:
         """Drive the multi-turn orchestrator loop.
 
-        Appends the user message, calls the Claude API, processes assistant
-        content blocks (text + tool_use), executes tools, feeds results back,
-        and repeats until the model stops requesting tools.
+        Appends the user message, calls the Bedrock Converse API, processes
+        assistant content blocks (text + toolUse), executes tools, feeds
+        results back, and repeats until the model stops requesting tools.
         """
         self.conversation_history.append({
             "role": "user",
-            "content": user_message,
+            "content": [{"text": user_message}],
         })
 
         while True:
             try:
-                response = await self.client.messages.create(
-                    model=ORCHESTRATOR_MODEL,
-                    max_tokens=4096,
-                    system=ORCHESTRATOR_SYSTEM_PROMPT,
-                    tools=TOOL_DEFINITIONS,
+                response = await asyncio.to_thread(
+                    self.client.converse,
+                    modelId=self.model_id,
+                    system=[{"text": ORCHESTRATOR_SYSTEM_PROMPT}],
                     messages=self.conversation_history,
+                    toolConfig={"tools": TOOL_DEFINITIONS_BEDROCK},
+                    inferenceConfig={"maxTokens": 4096},
                 )
-            except anthropic.APIError as exc:
-                logger.error("Anthropic API error: %s", exc)
+            except Exception as exc:
+                logger.error("Bedrock API error: %s", exc)
                 await self.ws_send({
                     "type": "error",
                     "payload": {"message": f"API error: {exc}"},
@@ -104,35 +101,35 @@ class EvaluationOrchestrator:
                 })
                 return
 
-            # Append the raw assistant turn (content is a list of ContentBlock
-            # objects; we convert to dicts so the history stays JSON-safe).
-            assistant_content = self._serialise_content(response.content)
-            self.conversation_history.append({
-                "role": "assistant",
-                "content": assistant_content,
-            })
+            # Append the assistant turn to history
+            assistant_message = response["output"]["message"]
+            self.conversation_history.append(assistant_message)
 
             # Stream text blocks and progress updates to the frontend
-            for block in response.content:
-                if block.type == "text":
+            for block in assistant_message["content"]:
+                if "text" in block:
                     await self.ws_send({
                         "type": "agent_message",
-                        "payload": {"message": block.text},
+                        "payload": {"message": block["text"]},
                         "session_id": self.session_id,
                     })
-                elif block.type == "tool_use":
+                elif "toolUse" in block:
+                    tool_name = block["toolUse"]["name"]
                     await self.ws_send({
                         "type": "progress_update",
                         "payload": {
-                            "tool": block.name,
-                            "message": f"Using tool: {block.name}",
+                            "tool": tool_name,
+                            "message": f"Using tool: {tool_name}",
                         },
                         "session_id": self.session_id,
                     })
 
             # If the model wants to use tools, execute them and loop back
-            if response.stop_reason == "tool_use":
-                tool_results = await self._process_tool_calls(response.content)
+            stop_reason = response.get("stopReason", "end_turn")
+            if stop_reason == "tool_use":
+                tool_results = await self._process_tool_calls(
+                    assistant_message["content"]
+                )
                 self.conversation_history.append({
                     "role": "user",
                     "content": tool_results,
@@ -151,22 +148,23 @@ class EvaluationOrchestrator:
     # ------------------------------------------------------------------
 
     async def _process_tool_calls(
-        self, content_blocks: list[Any]
+        self, content_blocks: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        """Execute every tool_use block and return tool_result messages."""
+        """Execute every toolUse block and return toolResult messages."""
         results: list[dict[str, Any]] = []
         for block in content_blocks:
-            if block.type != "tool_use":
+            if "toolUse" not in block:
                 continue
-            result = await self._execute_tool(block.name, block.input)
-            # Ensure the result is a string for the API
+            tool_use = block["toolUse"]
+            result = await self._execute_tool(tool_use["name"], tool_use["input"])
             content_str = (
                 json.dumps(result) if isinstance(result, dict) else str(result)
             )
             results.append({
-                "type": "tool_result",
-                "tool_use_id": block.id,
-                "content": content_str,
+                "toolResult": {
+                    "toolUseId": tool_use["toolUseId"],
+                    "content": [{"text": content_str}],
+                }
             })
         return results
 
@@ -215,33 +213,3 @@ class EvaluationOrchestrator:
             "decision": response.decision,
             "feedback": response.feedback or "",
         }
-
-    # ------------------------------------------------------------------
-    # Serialisation helpers
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _serialise_content(content_blocks: list[Any]) -> list[dict[str, Any]]:
-        """Convert Anthropic SDK ContentBlock objects to plain dicts.
-
-        The conversation history must remain JSON-serialisable so that it can
-        be sent back to the API on subsequent turns.
-        """
-        serialised: list[dict[str, Any]] = []
-        for block in content_blocks:
-            if block.type == "text":
-                serialised.append({"type": "text", "text": block.text})
-            elif block.type == "tool_use":
-                serialised.append({
-                    "type": "tool_use",
-                    "id": block.id,
-                    "name": block.name,
-                    "input": block.input,
-                })
-            else:
-                # Fallback — try to use the block's dict representation
-                try:
-                    serialised.append(block.model_dump())
-                except Exception:
-                    serialised.append({"type": block.type})
-        return serialised

@@ -7,11 +7,11 @@ These tests exercise the real API surface using Starlette's TestClient:
     3. Send a ``start_evaluation`` message with sample ProjectRequirements
     4. Assert that agent messages and progress updates are received
 
-Because the tests call the live Anthropic API they are **skipped by default**
-unless the ``ANTHROPIC_API_KEY`` environment variable is set.
+Because the tests call the live Bedrock API they are **skipped by default**
+unless the ``AWS_BEDROCK_E2E`` environment variable is set.
 
 Run manually with:
-    ANTHROPIC_API_KEY=sk-... pytest -m system backend/tests/system/
+    AWS_BEDROCK_E2E=1 pytest -m system backend/tests/system/
 """
 
 import os
@@ -110,13 +110,13 @@ def test_websocket_unknown_message_type():
 
 
 # ---------------------------------------------------------------------------
-# Full evaluation flow (requires ANTHROPIC_API_KEY)
+# Full evaluation flow (requires AWS_BEDROCK_E2E)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.skipif(
-    not os.environ.get("ANTHROPIC_API_KEY"),
-    reason="ANTHROPIC_API_KEY not set",
+    not os.environ.get("AWS_BEDROCK_E2E"),
+    reason="AWS_BEDROCK_E2E not set",
 )
 def test_full_evaluation_flow():
     """End-to-end: create session, connect WS, start evaluation, receive messages.
@@ -167,8 +167,8 @@ def test_full_evaluation_flow():
 
 
 @pytest.mark.skipif(
-    not os.environ.get("ANTHROPIC_API_KEY"),
-    reason="ANTHROPIC_API_KEY not set",
+    not os.environ.get("AWS_BEDROCK_E2E"),
+    reason="AWS_BEDROCK_E2E not set",
 )
 def test_chat_message_flow():
     """Send a user_message over WebSocket and expect an agent reply."""

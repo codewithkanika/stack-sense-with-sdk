@@ -27,11 +27,11 @@ app.include_router(ws_router)
 
 @app.on_event("startup")
 async def startup_event():
-    if not settings.ANTHROPIC_API_KEY:
-        logger.warning("ANTHROPIC_API_KEY is not set — agent features will be unavailable")
-    else:
-        logger.info("ANTHROPIC_API_KEY is configured")
-    logger.info("StackAdvisor API started")
+    logger.info(
+        "StackAdvisor API started (Bedrock model: %s, region: %s)",
+        settings.BEDROCK_MODEL_ID,
+        settings.AWS_REGION,
+    )
 
 
 @app.get("/health")

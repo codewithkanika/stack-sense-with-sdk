@@ -15,7 +15,7 @@ def ws_send():
 
 @pytest.fixture
 def orchestrator(ws_send):
-    with patch("app.agent.orchestrator.anthropic.AsyncAnthropic"):
+    with patch("app.agent.orchestrator.boto3.client") as mock_client:
         orch = EvaluationOrchestrator(
             session_id="test-session",
             ws_send_callback=ws_send,
@@ -27,48 +27,6 @@ def test_orchestrator_init(orchestrator, ws_send):
     assert orchestrator.session_id == "test-session"
     assert orchestrator.ws_send is ws_send
     assert orchestrator.conversation_history == []
-
-
-def test_serialise_content_text():
-    text_block = MagicMock()
-    text_block.type = "text"
-    text_block.text = "Hello world"
-
-    result = EvaluationOrchestrator._serialise_content([text_block])
-    assert result == [{"type": "text", "text": "Hello world"}]
-
-
-def test_serialise_content_tool_use():
-    tool_block = MagicMock()
-    tool_block.type = "tool_use"
-    tool_block.id = "tool-123"
-    tool_block.name = "search_tech_benchmarks"
-    tool_block.input = {"technology": "React"}
-
-    result = EvaluationOrchestrator._serialise_content([tool_block])
-    assert result == [{
-        "type": "tool_use",
-        "id": "tool-123",
-        "name": "search_tech_benchmarks",
-        "input": {"technology": "React"},
-    }]
-
-
-def test_serialise_content_mixed():
-    text_block = MagicMock()
-    text_block.type = "text"
-    text_block.text = "Analyzing..."
-
-    tool_block = MagicMock()
-    tool_block.type = "tool_use"
-    tool_block.id = "t1"
-    tool_block.name = "get_github_stats"
-    tool_block.input = {"repo_owner": "fb", "repo_name": "react"}
-
-    result = EvaluationOrchestrator._serialise_content([text_block, tool_block])
-    assert len(result) == 2
-    assert result[0]["type"] == "text"
-    assert result[1]["type"] == "tool_use"
 
 
 @pytest.mark.asyncio
@@ -99,14 +57,12 @@ async def test_approval_flow(orchestrator, ws_send):
     """Test that handle_approval_response unblocks the approval event."""
     response = ApprovalResponse(request_id="r1", decision="approve")
 
-    # Simulate: start waiting for approval, then respond
     async def respond_later():
         await asyncio.sleep(0.05)
         await orchestrator.handle_approval_response(response)
 
     asyncio.create_task(respond_later())
 
-    # _handle_approval_tool sends WS message then waits for event
     result = await orchestrator._handle_approval_tool({
         "title": "Test",
         "description": "Test approval",
@@ -114,25 +70,60 @@ async def test_approval_flow(orchestrator, ws_send):
     })
 
     assert result["decision"] == "approve"
-    assert ws_send.called  # Should have sent approval_request
+    assert ws_send.called
 
 
 @pytest.mark.asyncio
 async def test_run_conversation_api_error(orchestrator, ws_send):
     """Test that API errors are sent via WebSocket."""
-    import anthropic
-    orchestrator.client.messages.create = AsyncMock(
-        side_effect=anthropic.APIError(
-            message="rate limited",
-            request=MagicMock(),
-            body=None,
-        )
+    orchestrator.client.converse = MagicMock(
+        side_effect=Exception("rate limited")
     )
     await orchestrator._run_conversation("test message")
 
-    # Should have sent error via WS
     error_calls = [
         call for call in ws_send.call_args_list
         if call[0][0].get("type") == "error"
     ]
     assert len(error_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_process_tool_calls(orchestrator):
+    """Test tool call processing with Bedrock content format."""
+    content_blocks = [
+        {"text": "Let me look that up."},
+        {
+            "toolUse": {
+                "toolUseId": "tool-123",
+                "name": "search_tech_benchmarks",
+                "input": {"technology": "React"},
+            }
+        },
+    ]
+    results = await orchestrator._process_tool_calls(content_blocks)
+    assert len(results) == 1
+    assert "toolResult" in results[0]
+    assert results[0]["toolResult"]["toolUseId"] == "tool-123"
+
+
+@pytest.mark.asyncio
+async def test_run_conversation_end_turn(orchestrator, ws_send):
+    """Test a simple conversation that ends without tool use."""
+    orchestrator.client.converse = MagicMock(
+        return_value={
+            "output": {
+                "message": {
+                    "role": "assistant",
+                    "content": [{"text": "Hello!"}],
+                }
+            },
+            "stopReason": "end_turn",
+        }
+    )
+
+    await orchestrator._run_conversation("Hi")
+
+    message_types = [call[0][0]["type"] for call in ws_send.call_args_list]
+    assert "agent_message" in message_types
+    assert "evaluation_complete" in message_types

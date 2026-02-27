@@ -2,8 +2,8 @@
 Custom MCP tools for StackAdvisor AI agent.
 
 These tools are used by the orchestrator and subagents during tech stack evaluation.
-They are defined as async functions with a TOOL_DEFINITIONS list (following the
-Anthropic tool-use schema) and a TOOL_HANDLERS registry for dispatch.
+They are defined as async functions with a TOOL_DEFINITIONS_BEDROCK list (following
+the AWS Bedrock Converse toolSpec schema) and a TOOL_HANDLERS registry for dispatch.
 
 Tools:
 - search_tech_benchmarks: Search for performance benchmarks for a technology
@@ -20,107 +20,127 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Tool definitions — Anthropic tool-use schema
-# These are passed to the Claude API when creating messages so the model knows
-# which tools are available and how to invoke them.
+# Tool definitions — AWS Bedrock Converse toolSpec schema
+# These are passed to the Bedrock Converse API so the model knows which tools
+# are available and how to invoke them.
 # ---------------------------------------------------------------------------
 
-TOOL_DEFINITIONS: list[dict[str, Any]] = [
+TOOL_DEFINITIONS_BEDROCK: list[dict[str, Any]] = [
     {
-        "name": "search_tech_benchmarks",
-        "description": "Search for latest performance benchmarks for a technology. Returns structured benchmark metadata that the agent can use to compare technologies.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "technology": {
-                    "type": "string",
-                    "description": "Technology to search benchmarks for (e.g., 'React', 'PostgreSQL', 'Go')",
-                },
-                "benchmark_type": {
-                    "type": "string",
-                    "description": "Type of benchmark (e.g., 'performance', 'throughput', 'latency', 'memory')",
-                },
-            },
-            "required": ["technology"],
-        },
-    },
-    {
-        "name": "get_github_stats",
-        "description": "Get GitHub repository statistics for a technology including stars, forks, open issues, primary language, and last push date.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "repo_owner": {
-                    "type": "string",
-                    "description": "GitHub repository owner (e.g., 'facebook')",
-                },
-                "repo_name": {
-                    "type": "string",
-                    "description": "GitHub repository name (e.g., 'react')",
-                },
-            },
-            "required": ["repo_owner", "repo_name"],
-        },
-    },
-    {
-        "name": "compare_cloud_pricing",
-        "description": "Compare pricing across cloud providers (AWS, GCP, Azure) for a given service type and usage tier.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "service_type": {
-                    "type": "string",
-                    "description": "Type of cloud service (e.g., 'compute', 'database', 'storage', 'cdn')",
-                },
-                "usage_tier": {
-                    "type": "string",
-                    "description": "Usage tier (e.g., 'small', 'medium', 'large', 'enterprise')",
-                },
-            },
-            "required": ["service_type"],
-        },
-    },
-    {
-        "name": "generate_comparison_matrix",
-        "description": "Generate a structured comparison matrix for evaluating multiple technologies against a set of criteria. Returns a matrix with 'pending_evaluation' cells for the agent to fill in.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "technologies": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of technologies to compare (e.g., ['React', 'Vue', 'Svelte'])",
-                },
-                "criteria": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Evaluation criteria (e.g., ['performance', 'learning_curve', 'ecosystem'])",
-                },
-            },
-            "required": ["technologies", "criteria"],
-        },
-    },
-    {
-        "name": "request_user_approval",
-        "description": "Request human approval for a recommendation before proceeding. This pauses the agent workflow and waits for the user to approve, modify, or reject the recommendation.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "title": {
-                    "type": "string",
-                    "description": "Short title for the approval request",
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Detailed description of what is being recommended and why",
-                },
-                "recommendation": {
+        "toolSpec": {
+            "name": "search_tech_benchmarks",
+            "description": "Search for latest performance benchmarks for a technology. Returns structured benchmark metadata that the agent can use to compare technologies.",
+            "inputSchema": {
+                "json": {
                     "type": "object",
-                    "description": "The structured recommendation object to be approved",
-                },
+                    "properties": {
+                        "technology": {
+                            "type": "string",
+                            "description": "Technology to search benchmarks for (e.g., 'React', 'PostgreSQL', 'Go')",
+                        },
+                        "benchmark_type": {
+                            "type": "string",
+                            "description": "Type of benchmark (e.g., 'performance', 'throughput', 'latency', 'memory')",
+                        },
+                    },
+                    "required": ["technology"],
+                }
             },
-            "required": ["title", "description", "recommendation"],
-        },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "get_github_stats",
+            "description": "Get GitHub repository statistics for a technology including stars, forks, open issues, primary language, and last push date.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "repo_owner": {
+                            "type": "string",
+                            "description": "GitHub repository owner (e.g., 'facebook')",
+                        },
+                        "repo_name": {
+                            "type": "string",
+                            "description": "GitHub repository name (e.g., 'react')",
+                        },
+                    },
+                    "required": ["repo_owner", "repo_name"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "compare_cloud_pricing",
+            "description": "Compare pricing across cloud providers (AWS, GCP, Azure) for a given service type and usage tier.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "service_type": {
+                            "type": "string",
+                            "description": "Type of cloud service (e.g., 'compute', 'database', 'storage', 'cdn')",
+                        },
+                        "usage_tier": {
+                            "type": "string",
+                            "description": "Usage tier (e.g., 'small', 'medium', 'large', 'enterprise')",
+                        },
+                    },
+                    "required": ["service_type"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "generate_comparison_matrix",
+            "description": "Generate a structured comparison matrix for evaluating multiple technologies against a set of criteria. Returns a matrix with 'pending_evaluation' cells for the agent to fill in.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "technologies": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of technologies to compare (e.g., ['React', 'Vue', 'Svelte'])",
+                        },
+                        "criteria": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Evaluation criteria (e.g., ['performance', 'learning_curve', 'ecosystem'])",
+                        },
+                    },
+                    "required": ["technologies", "criteria"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "request_user_approval",
+            "description": "Request human approval for a recommendation before proceeding. This pauses the agent workflow and waits for the user to approve, modify, or reject the recommendation.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "description": "Short title for the approval request",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Detailed description of what is being recommended and why",
+                        },
+                        "recommendation": {
+                            "type": "object",
+                            "description": "The structured recommendation object to be approved",
+                        },
+                    },
+                    "required": ["title", "description", "recommendation"],
+                }
+            },
+        }
     },
 ]
 

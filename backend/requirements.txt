@@ -1,5 +1,4 @@
-anthropic
-claude-agent-sdk
+boto3
 fastapi
 uvicorn[standard]
 websockets
