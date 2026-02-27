@@ -157,10 +157,82 @@ Backend: http://localhost:8000 | Frontend: http://localhost:3000
 Deployed to AWS ECS Fargate + ALB via GitHub Actions.
 
 - Push to `main` triggers CI (lint, test, build, Docker)
-- After CI passes, deploy workflow pushes images to ECR and updates ECS services
+- After CI passes, manually trigger deploy workflow to push images to ECR and update ECS services
 - ALB configured with 300s idle timeout for WebSocket support
 
-Required GitHub secrets: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+### AWS Setup
+
+#### 1. Create IAM User
+
+1. Go to [IAM Console](https://console.aws.amazon.com/iam/)
+2. Click **Users** → **Create user**
+3. Name: `stackadvisor-deploy`
+4. Attach these policies directly:
+   - `AmazonEC2ContainerRegistryFullAccess`
+   - `AmazonECS_FullAccess`
+5. Click **Create user**
+
+#### 2. Create Access Keys
+
+1. Go to the `stackadvisor-deploy` user → **Security credentials** tab
+2. Click **Create access key**
+3. Select **Command Line Interface (CLI)**
+4. Copy the **Access Key ID** and **Secret Access Key** (you won't see the secret again)
+
+#### 3. Configure Credentials
+
+**Local AWS CLI:**
+
+```bash
+aws configure
+# AWS Access Key ID: <paste access key>
+# AWS Secret Access Key: <paste secret key>
+# Default region: us-east-1
+# Default output format: json
+
+# Verify:
+aws sts get-caller-identity
+```
+
+**GitHub Secrets (for CI/CD):**
+
+```bash
+gh secret set AWS_ACCESS_KEY_ID
+# Paste access key when prompted
+
+gh secret set AWS_SECRET_ACCESS_KEY
+# Paste secret key when prompted
+
+# Verify:
+gh secret list
+```
+
+#### 4. Create AWS Resources
+
+```bash
+# Create ECR repositories
+aws ecr create-repository --repository-name stackadvisor-backend --region us-east-1
+aws ecr create-repository --repository-name stackadvisor-frontend --region us-east-1
+
+# Create ECS cluster
+aws ecs create-cluster --cluster-name stackadvisor-cluster --region us-east-1
+```
+
+After creating the cluster, you'll also need:
+- **ECS Task Definitions** for backend and frontend services
+- **ECS Services** (`stackadvisor-backend`, `stackadvisor-frontend`) in the cluster
+- **Application Load Balancer** with target groups for each service
+- **Security Groups** allowing inbound on ports 80/443 (ALB) and 8000/3000 (tasks)
+- **ALB idle timeout** set to 300s (for WebSocket support)
+
+#### 5. Deploy
+
+Once AWS resources are configured and GitHub secrets are set:
+
+```bash
+# Trigger deploy manually from GitHub Actions
+gh workflow run deploy.yml
+```
 
 ## Current Status
 
