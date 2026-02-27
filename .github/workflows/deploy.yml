@@ -14,7 +14,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    # if: github.ref == 'refs/heads/main'  # temporarily disabled for branch testing
     steps:
       - uses: actions/checkout@v4
 
@@ -43,5 +43,5 @@ jobs:
 
       - name: Update ECS services
         run: |
-          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_BACKEND_SERVICE --force-new-deployment
+          aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_BACKEND_SERVICE --task-definition stackadvisor-backend:3 --force-new-deployment
           aws ecs update-service --cluster $ECS_CLUSTER --service $ECS_FRONTEND_SERVICE --force-new-deployment
