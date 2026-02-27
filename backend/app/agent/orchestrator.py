@@ -118,7 +118,7 @@ class EvaluationOrchestrator:
                     if rec:
                         await self.ws_send({
                             "type": "recommendation",
-                            "payload": rec,
+                            "payload": self._normalize_recommendation(rec),
                             "session_id": self.session_id,
                         })
                     await self.ws_send({
@@ -246,81 +246,109 @@ class EvaluationOrchestrator:
     # Recommendation normalisation
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _normalize_recommendation(raw: Any) -> dict[str, Any]:
+    _TECH_DEFAULTS: dict[str, Any] = {
+        "confidence": 0.8,
+        "justification": "",
+        "pros": [],
+        "cons": [],
+        "monthly_cost_estimate": None,
+        "learning_curve": "medium",
+        "community_score": "large",
+    }
+
+    _META_KEYS = {
+        "overall_justification", "estimated_monthly_cost",
+        "scalability_assessment", "risk_factors", "justification",
+        "summary", "notes", "recommendations", "alternatives",
+        "primary",
+    }
+
+    @classmethod
+    def _ensure_tech_fields(cls, item: dict[str, Any]) -> dict[str, Any]:
+        """Fill missing TechRecommendation fields with defaults."""
+        for k, v in cls._TECH_DEFAULTS.items():
+            item.setdefault(k, v)
+        return item
+
+    @classmethod
+    def _normalize_alternatives(
+        cls, raw_alts: Any
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Convert alternatives from various model formats to Record<string, TechRecommendation[]>.
+
+        Handles:
+          - Already correct: {"frontend": [TechRec, ...]}
+          - Flat array: [{"category": "engine", "technology": "Unreal"}, ...]
+          - None / missing
+        """
+        if not raw_alts:
+            return {}
+        if isinstance(raw_alts, dict):
+            # Already grouped by category — ensure tech fields
+            result: dict[str, list[dict[str, Any]]] = {}
+            for cat, techs in raw_alts.items():
+                if isinstance(techs, list):
+                    result[cat] = [cls._ensure_tech_fields(dict(t)) for t in techs if isinstance(t, dict)]
+            return result
+        if isinstance(raw_alts, list):
+            # Flat array — group by category
+            grouped: dict[str, list[dict[str, Any]]] = {}
+            for item in raw_alts:
+                if not isinstance(item, dict) or "technology" not in item:
+                    continue
+                cat = item.get("category", "other")
+                grouped.setdefault(cat, []).append(cls._ensure_tech_fields(dict(item)))
+            return grouped
+        return {}
+
+    @classmethod
+    def _normalize_recommendation(cls, raw: Any) -> dict[str, Any]:
         """Convert a model's free-form recommendation into StackRecommendation format.
 
-        The model may return structured data that already matches, or a flat
-        dict like {"frontend": "React", "backend": "FastAPI", ...}.  This
-        method normalises both into the shape the frontend expects.
+        Handles multiple model output shapes:
+          1. Already correct: {"primary": [...], "alternatives": {...}, ...}
+          2. Array under "recommendations": {"recommendations": [...], ...}
+          3. Flat key-value: {"frontend": "React", "backend": "FastAPI", ...}
         """
+        empty: dict[str, Any] = {
+            "primary": [],
+            "alternatives": {},
+            "overall_justification": "",
+            "estimated_monthly_cost": "N/A",
+            "scalability_assessment": "",
+            "risk_factors": [],
+        }
+
         if not isinstance(raw, dict):
-            return {
-                "primary": [],
-                "alternatives": {},
-                "overall_justification": str(raw) if raw else "",
-                "estimated_monthly_cost": "N/A",
-                "scalability_assessment": "",
-                "risk_factors": [],
-            }
+            if raw:
+                empty["overall_justification"] = str(raw)
+            return empty
 
-        # Already in the right shape
-        if "primary" in raw and isinstance(raw.get("primary"), list):
-            rec = dict(raw)
-            rec.setdefault("alternatives", {})
-            rec.setdefault("overall_justification", "")
-            rec.setdefault("estimated_monthly_cost", "N/A")
-            rec.setdefault("scalability_assessment", "")
-            rec.setdefault("risk_factors", [])
-            return rec
+        # --- Determine primary list ---
+        primary_raw = raw.get("primary") or raw.get("recommendations")
+        if isinstance(primary_raw, list):
+            primary = [cls._ensure_tech_fields(dict(t)) for t in primary_raw if isinstance(t, dict)]
+        else:
+            # Flat key-value pairs like {"frontend": "React", ...}
+            primary = []
+            for key, value in raw.items():
+                if key.lower() in cls._META_KEYS:
+                    continue
+                if isinstance(value, dict) and "technology" in value:
+                    entry = cls._ensure_tech_fields({**value, "category": key})
+                    primary.append(entry)
+                elif isinstance(value, str):
+                    primary.append(cls._ensure_tech_fields({
+                        "category": key,
+                        "technology": value,
+                    }))
 
-        # Convert flat key-value pairs to TechRecommendation entries
-        KNOWN_CATEGORIES = {
-            "frontend", "backend", "database", "infrastructure",
-            "cache", "search", "engine", "networking", "auth",
-            "hosting", "storage", "cdn", "messaging", "monitoring",
-        }
-        META_KEYS = {
-            "overall_justification", "estimated_monthly_cost",
-            "scalability_assessment", "risk_factors", "justification",
-            "summary", "notes",
-        }
-
-        primary: list[dict[str, Any]] = []
-        for key, value in raw.items():
-            if key.lower() in META_KEYS:
-                continue
-            # If value is a dict with a "technology" key, use it directly
-            if isinstance(value, dict) and "technology" in value:
-                entry = {
-                    "category": key,
-                    "confidence": 0.8,
-                    "justification": value.get("justification", ""),
-                    "pros": value.get("pros", []),
-                    "cons": value.get("cons", []),
-                    "monthly_cost_estimate": value.get("monthly_cost_estimate"),
-                    "learning_curve": value.get("learning_curve", "medium"),
-                    "community_score": value.get("community_score", "large"),
-                    **value,
-                }
-                entry["category"] = key
-                primary.append(entry)
-            elif isinstance(value, str):
-                primary.append({
-                    "category": key,
-                    "technology": value,
-                    "confidence": 0.8,
-                    "justification": "",
-                    "pros": [],
-                    "cons": [],
-                    "monthly_cost_estimate": None,
-                    "learning_curve": "medium",
-                    "community_score": "large",
-                })
+        # --- Normalise alternatives ---
+        alternatives = cls._normalize_alternatives(raw.get("alternatives"))
 
         return {
             "primary": primary,
-            "alternatives": {},
+            "alternatives": alternatives,
             "overall_justification": raw.get(
                 "overall_justification",
                 raw.get("justification", raw.get("summary", "")),
