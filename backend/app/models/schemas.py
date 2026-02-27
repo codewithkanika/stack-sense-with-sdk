@@ -53,6 +53,6 @@ class ApprovalRequest(BaseModel):
 
 
 class ApprovalResponse(BaseModel):
-    request_id: str
+    request_id: str | None = None
     decision: str  # "approve", "modify", "reject"
     feedback: str | None = None

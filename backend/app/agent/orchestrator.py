@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import re
+import uuid
 from typing import Any
 
 import boto3
@@ -207,9 +208,11 @@ class EvaluationOrchestrator:
         self, tool_input: dict[str, Any]
     ) -> dict[str, Any]:
         """Send an approval request to the frontend and block until answered."""
+        # Generate a unique id so the frontend can reference it in the response
+        payload = {"id": str(uuid.uuid4()), **tool_input}
         await self.ws_send({
             "type": "approval_request",
-            "payload": tool_input,
+            "payload": payload,
             "session_id": self.session_id,
         })
 
