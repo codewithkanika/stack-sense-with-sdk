@@ -227,9 +227,107 @@ class EvaluationOrchestrator:
         if response is None:
             return {"decision": "reject", "feedback": "No response received."}
 
+        # On approval, send the recommendation to populate the right-side panel
+        if response.decision == "approve":
+            raw_rec = tool_input.get("recommendation", {})
+            normalized = self._normalize_recommendation(raw_rec)
+            await self.ws_send({
+                "type": "recommendation",
+                "payload": normalized,
+                "session_id": self.session_id,
+            })
+
         return {
             "decision": response.decision,
             "feedback": response.feedback or "",
+        }
+
+    # ------------------------------------------------------------------
+    # Recommendation normalisation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _normalize_recommendation(raw: Any) -> dict[str, Any]:
+        """Convert a model's free-form recommendation into StackRecommendation format.
+
+        The model may return structured data that already matches, or a flat
+        dict like {"frontend": "React", "backend": "FastAPI", ...}.  This
+        method normalises both into the shape the frontend expects.
+        """
+        if not isinstance(raw, dict):
+            return {
+                "primary": [],
+                "alternatives": {},
+                "overall_justification": str(raw) if raw else "",
+                "estimated_monthly_cost": "N/A",
+                "scalability_assessment": "",
+                "risk_factors": [],
+            }
+
+        # Already in the right shape
+        if "primary" in raw and isinstance(raw.get("primary"), list):
+            rec = dict(raw)
+            rec.setdefault("alternatives", {})
+            rec.setdefault("overall_justification", "")
+            rec.setdefault("estimated_monthly_cost", "N/A")
+            rec.setdefault("scalability_assessment", "")
+            rec.setdefault("risk_factors", [])
+            return rec
+
+        # Convert flat key-value pairs to TechRecommendation entries
+        KNOWN_CATEGORIES = {
+            "frontend", "backend", "database", "infrastructure",
+            "cache", "search", "engine", "networking", "auth",
+            "hosting", "storage", "cdn", "messaging", "monitoring",
+        }
+        META_KEYS = {
+            "overall_justification", "estimated_monthly_cost",
+            "scalability_assessment", "risk_factors", "justification",
+            "summary", "notes",
+        }
+
+        primary: list[dict[str, Any]] = []
+        for key, value in raw.items():
+            if key.lower() in META_KEYS:
+                continue
+            # If value is a dict with a "technology" key, use it directly
+            if isinstance(value, dict) and "technology" in value:
+                entry = {
+                    "category": key,
+                    "confidence": 0.8,
+                    "justification": value.get("justification", ""),
+                    "pros": value.get("pros", []),
+                    "cons": value.get("cons", []),
+                    "monthly_cost_estimate": value.get("monthly_cost_estimate"),
+                    "learning_curve": value.get("learning_curve", "medium"),
+                    "community_score": value.get("community_score", "large"),
+                    **value,
+                }
+                entry["category"] = key
+                primary.append(entry)
+            elif isinstance(value, str):
+                primary.append({
+                    "category": key,
+                    "technology": value,
+                    "confidence": 0.8,
+                    "justification": "",
+                    "pros": [],
+                    "cons": [],
+                    "monthly_cost_estimate": None,
+                    "learning_curve": "medium",
+                    "community_score": "large",
+                })
+
+        return {
+            "primary": primary,
+            "alternatives": {},
+            "overall_justification": raw.get(
+                "overall_justification",
+                raw.get("justification", raw.get("summary", "")),
+            ),
+            "estimated_monthly_cost": raw.get("estimated_monthly_cost", "N/A"),
+            "scalability_assessment": raw.get("scalability_assessment", ""),
+            "risk_factors": raw.get("risk_factors", []),
         }
 
     # ------------------------------------------------------------------
