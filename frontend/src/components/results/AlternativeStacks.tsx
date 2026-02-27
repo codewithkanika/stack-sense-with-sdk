@@ -23,7 +23,10 @@ export default function AlternativeStacks({
   recommendedTechs,
 }: AlternativeStacksProps) {
   const categories = useMemo(
-    () => Object.keys(alternatives).filter((k) => alternatives[k].length > 0),
+    () =>
+      alternatives
+        ? Object.keys(alternatives).filter((k) => alternatives[k]?.length > 0)
+        : [],
     [alternatives]
   );
 

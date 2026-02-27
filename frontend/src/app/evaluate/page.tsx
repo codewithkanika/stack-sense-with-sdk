@@ -76,9 +76,12 @@ function EvaluateContent() {
   const hasRecommendation = recommendation !== null;
   const hasAlternatives =
     hasRecommendation &&
+    recommendation.alternatives != null &&
     Object.keys(recommendation.alternatives).length > 0;
   const hasPrimaryTechs =
-    hasRecommendation && recommendation.primary.length > 0;
+    hasRecommendation &&
+    Array.isArray(recommendation.primary) &&
+    recommendation.primary.length > 0;
 
   // Show results panel once evaluation starts, completes, or has data
   const showResults =

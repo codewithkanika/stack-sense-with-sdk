@@ -208,8 +208,11 @@ class EvaluationOrchestrator:
         self, tool_input: dict[str, Any]
     ) -> dict[str, Any]:
         """Send an approval request to the frontend and block until answered."""
-        # Generate a unique id so the frontend can reference it in the response
-        payload = {"id": str(uuid.uuid4()), **tool_input}
+        # Generate a unique id so the frontend can reference it in the response.
+        # The tool schema uses "recommendation" but the frontend expects "proposed_stack".
+        payload: dict[str, Any] = {"id": str(uuid.uuid4()), **tool_input}
+        if "recommendation" in payload and "proposed_stack" not in payload:
+            payload["proposed_stack"] = payload.pop("recommendation")
         await self.ws_send({
             "type": "approval_request",
             "payload": payload,

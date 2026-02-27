@@ -101,7 +101,12 @@ export function useWebSocket(sessionId: string | null) {
 
         case "recommendation": {
           const rec = payload as unknown as StackRecommendation;
-          setRecommendation(rec);
+          // Only set if it has at least the primary array to avoid Object.keys crashes
+          if (rec && Array.isArray(rec.primary)) {
+            if (!rec.alternatives) rec.alternatives = {};
+            if (!rec.risk_factors) rec.risk_factors = [];
+            setRecommendation(rec);
+          }
           break;
         }
 
