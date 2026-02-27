@@ -9,6 +9,7 @@ and handling the human-in-the-loop approval gate via WebSocket.
 import asyncio
 import json
 import logging
+import re
 from typing import Any
 
 import boto3
@@ -108,9 +109,20 @@ class EvaluationOrchestrator:
             # Stream text blocks and progress updates to the frontend
             for block in assistant_message["content"]:
                 if "text" in block:
+                    text = self._clean_text(block["text"])
+                    if not text.strip():
+                        continue
+                    # Try to extract a JSON recommendation from the text
+                    rec = self._try_extract_recommendation(text)
+                    if rec:
+                        await self.ws_send({
+                            "type": "recommendation",
+                            "payload": rec,
+                            "session_id": self.session_id,
+                        })
                     await self.ws_send({
                         "type": "agent_message",
-                        "payload": {"message": block["text"]},
+                        "payload": {"message": text},
                         "session_id": self.session_id,
                     })
                 elif "toolUse" in block:
@@ -213,3 +225,37 @@ class EvaluationOrchestrator:
             "decision": response.decision,
             "feedback": response.feedback or "",
         }
+
+    # ------------------------------------------------------------------
+    # Text processing helpers
+    # ------------------------------------------------------------------
+
+    _THINKING_RE = re.compile(r"<thinking>.*?</thinking>", re.DOTALL)
+
+    @staticmethod
+    def _clean_text(text: str) -> str:
+        """Strip model reasoning tags (e.g. <thinking>) from output."""
+        return EvaluationOrchestrator._THINKING_RE.sub("", text).strip()
+
+    @staticmethod
+    def _try_extract_recommendation(text: str) -> dict[str, Any] | None:
+        """Try to extract a StackRecommendation JSON block from text.
+
+        Looks for ```json ... ``` fenced blocks or bare {...} that contain
+        recommendation-like keys. Returns the parsed dict or None.
+        """
+        # Try fenced code blocks first
+        fenced = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        candidates = fenced if fenced else re.findall(r"(\{[^{}]{100,}\})", text, re.DOTALL)
+
+        for candidate in candidates:
+            try:
+                obj = json.loads(candidate)
+                # Check if it looks like a recommendation
+                if isinstance(obj, dict) and any(
+                    k in obj for k in ("recommendations", "frontend", "backend", "database", "infrastructure", "category")
+                ):
+                    return obj
+            except (json.JSONDecodeError, TypeError):
+                continue
+        return None
